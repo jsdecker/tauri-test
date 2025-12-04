@@ -42,10 +42,15 @@ export const config = {
   maxInstances: 1,
   capabilities: [
     {
-      browserName: 'wry', // Tauri's webview
-      'tauri:options': {
-        application: appPath,
+      // W3C capabilities format for tauri-driver
+      'alwaysMatch': {
+        browserName: 'wry',
+        'tauri:options': {
+          application: appPath,
+        },
       },
+      // Disable BiDi to use classic WebDriver protocol
+      'webSocketUrl': false,
     },
   ],
 
