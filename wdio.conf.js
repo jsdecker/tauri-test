@@ -221,49 +221,48 @@ export const config = {
         const resultsPath = path.join(resultsDir, file);
         const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
 
-        for (const suite of results.suites || []) {
-          // Extract spec filename from the file path
-          const specFile = suite.file ? path.basename(suite.file) : null;
-          const testKey = specFile ? specToTestKey[specFile] : null;
+        // Get spec file from specs array (e.g., "file:///D:/a/.../external-links.spec.js")
+        const specPath = results.specs?.[0] || '';
+        const specFile = path.basename(specPath.replace('file:///', ''));
+        const testKey = specToTestKey[specFile];
 
-          if (!testKey) continue;
-
-          // Determine overall status from tests
-          let status = 'PASSED';
-          const testResults = [];
-
-          for (const test of suite.tests || []) {
-            const testStatus = test.state === 'passed' ? 'PASSED' : test.state === 'failed' ? 'FAILED' : 'TODO';
-            if (testStatus === 'FAILED') status = 'FAILED';
-
-            testResults.push({
-              name: test.name,
-              status: testStatus,
-              duration: test.duration,
-            });
-          }
-
-          // Check for evidence screenshot
-          const evidenceFile = `${testKey}-${specFile.replace('.spec.js', '')}.png`;
-          const evidencePath = path.join(resultsDir, 'evidence', evidenceFile);
-          const evidence = [];
-
-          if (fs.existsSync(evidencePath)) {
-            const imageData = fs.readFileSync(evidencePath);
-            evidence.push({
-              data: imageData.toString('base64'),
-              filename: evidenceFile,
-              contentType: 'image/png',
-            });
-          }
-
-          tests.push({
-            testKey,
-            status,
-            comment: `Automated test run - ${testResults.length} test(s)`,
-            evidence,
-          });
+        if (!testKey) {
+          console.log(`  ⚠️  No mapping for spec: ${specFile}`);
+          continue;
         }
+
+        // Determine overall status from all suites/tests
+        let status = 'PASSED';
+        let totalTests = 0;
+
+        for (const suite of results.suites || []) {
+          for (const test of suite.tests || []) {
+            totalTests++;
+            if (test.state === 'failed') status = 'FAILED';
+          }
+        }
+
+        // Check for evidence screenshot (format: TT-14-greeting-workflow.png)
+        const evidenceFile = `${testKey}-${specFile.replace('.spec.js', '')}.png`;
+        const evidencePath = path.join(resultsDir, 'evidence', evidenceFile);
+        const evidence = [];
+
+        if (fs.existsSync(evidencePath)) {
+          const imageData = fs.readFileSync(evidencePath);
+          evidence.push({
+            data: imageData.toString('base64'),
+            filename: evidenceFile,
+            contentType: 'image/png',
+          });
+          console.log(`  📷 Found evidence: ${evidenceFile}`);
+        }
+
+        tests.push({
+          testKey,
+          status,
+          comment: `Automated test run - ${totalTests} test(s) - ${status}`,
+          evidence,
+        });
       }
 
       if (tests.length === 0) {
