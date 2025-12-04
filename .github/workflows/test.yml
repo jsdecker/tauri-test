@@ -9,7 +9,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
@@ -24,11 +24,6 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf webkit2gtk-driver
-
       - name: Install tauri-driver
         run: cargo install tauri-driver
 
@@ -39,42 +34,18 @@ jobs:
         run: |
           npm run tauri build -- --debug --no-bundle
           echo "=== Checking build output ==="
-          ls -la ./src-tauri/target/debug/ | head -20
-          echo "=== Binary info ==="
-          file ./src-tauri/target/debug/tauri-test-temp || echo "Binary not found"
-          chmod +x ./src-tauri/target/debug/tauri-test-temp || echo "Could not chmod"
+          dir .\src-tauri\target\debug\
+        shell: cmd
 
       - name: Run WebDriverIO tests
         run: |
-          # Find WebKitWebDriver path
-          which WebKitWebDriver || echo "WebKitWebDriver not in PATH"
-
-          # Verify binary exists and is executable
-          echo "=== Checking application binary ==="
-          ls -la ./src-tauri/target/debug/tauri-test-temp
-
-          # Start tauri-driver with verbose logging
-          RUST_LOG=debug tauri-driver 2>&1 &
-          DRIVER_PID=$!
-          sleep 5
-
-          # Check if driver is running and show any output
-          if ! kill -0 $DRIVER_PID 2>/dev/null; then
-            echo "tauri-driver failed to start"
-            exit 1
-          fi
-          echo "tauri-driver running on PID $DRIVER_PID"
-
-          # Test that driver is responding
-          curl -s http://127.0.0.1:4444/status || echo "Driver status check failed"
-
-          # Run tests
-          CI=true npm test || TEST_EXIT=$?
-
-          # Stop tauri-driver
-          kill $DRIVER_PID 2>/dev/null || true
-
-          exit ${TEST_EXIT:-0}
+          echo "Starting tauri-driver..."
+          Start-Process -FilePath "tauri-driver" -NoNewWindow
+          Start-Sleep -Seconds 5
+          echo "Running tests..."
+          $env:CI = "true"
+          npm test
+        shell: pwsh
         env:
           XRAY_CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
           XRAY_CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}

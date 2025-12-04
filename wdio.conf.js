@@ -16,8 +16,9 @@ const __dirname = path.dirname(__filename);
 let tauriDriver;
 const isCI = process.env.CI === 'true';
 
-// Use absolute path for the application binary
-const appPath = path.resolve(__dirname, './src-tauri/target/debug/tauri-test-temp');
+// Use absolute path for the application binary (add .exe on Windows)
+const isWindows = process.platform === 'win32';
+const appPath = path.resolve(__dirname, `./src-tauri/target/debug/tauri-test-temp${isWindows ? '.exe' : ''}`);
 
 export const config = {
   //
