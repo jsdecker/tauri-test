@@ -27,7 +27,7 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf webkit2gtk-driver
 
       - name: Install tauri-driver
         run: cargo install tauri-driver
@@ -40,10 +40,20 @@ jobs:
 
       - name: Run WebDriverIO tests
         run: |
+          # Find WebKitWebDriver path
+          which WebKitWebDriver || echo "WebKitWebDriver not in PATH"
+
           # Start tauri-driver in background
           tauri-driver &
           DRIVER_PID=$!
-          sleep 2
+          sleep 5
+
+          # Check if driver is running
+          if ! kill -0 $DRIVER_PID 2>/dev/null; then
+            echo "tauri-driver failed to start"
+            exit 1
+          fi
+          echo "tauri-driver running on PID $DRIVER_PID"
 
           # Run tests
           npm test || TEST_EXIT=$?
