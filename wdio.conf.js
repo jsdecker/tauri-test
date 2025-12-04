@@ -8,9 +8,16 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import { spawn, spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let tauriDriver;
 const isCI = process.env.CI === 'true';
+
+// Use absolute path for the application binary
+const appPath = path.resolve(__dirname, './src-tauri/target/debug/tauri-test-temp');
 
 export const config = {
   //
@@ -36,7 +43,7 @@ export const config = {
     {
       browserName: 'wry', // Tauri's webview
       'tauri:options': {
-        application: './src-tauri/target/debug/tauri-test-temp',
+        application: appPath,
       },
     },
   ],
