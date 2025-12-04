@@ -38,15 +38,9 @@ jobs:
         shell: cmd
 
       - name: Run WebDriverIO tests
-        run: |
-          echo "Starting tauri-driver..."
-          Start-Process -FilePath "tauri-driver" -NoNewWindow
-          Start-Sleep -Seconds 5
-          echo "Running tests..."
-          $env:CI = "true"
-          npm test
-        shell: pwsh
+        run: npm test
         env:
+          CI: 'true'
           XRAY_CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
           XRAY_CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
 
