@@ -280,6 +280,16 @@ export const config = {
         'TT-16': 'Input Validation Verification',
       };
 
+      // Jira credentials for attachment upload
+      const jiraBaseUrl = process.env.JIRA_BASE_URL || 'https://revvity-dpx.atlassian.net';
+      const jiraEmail = process.env.JIRA_EMAIL;
+      const jiraApiToken = process.env.JIRA_API_TOKEN;
+      const canUploadAttachments = jiraEmail && jiraApiToken;
+
+      if (!canUploadAttachments) {
+        console.log('  ⚠️  JIRA_EMAIL/JIRA_API_TOKEN not set - attachments will only be in Xray\n');
+      }
+
       // Import each test as a separate Test Execution
       for (const test of tests) {
         const xrayPayload = {
@@ -307,8 +317,45 @@ export const config = {
         }
 
         const importResult = await importResponse.json();
+        const testExecKey = importResult.key;
         const icon = test.status === 'PASSED' ? '✓' : '✗';
-        console.log(`  ${icon} ${test.testKey}: ${test.status} → ${importResult.key}`);
+        console.log(`  ${icon} ${test.testKey}: ${test.status} → ${testExecKey}`);
+
+        // Upload evidence as Jira attachment if credentials available
+        if (canUploadAttachments && test.evidence && test.evidence.length > 0) {
+          for (const evidence of test.evidence) {
+            try {
+              const boundary = '----FormBoundary' + Math.random().toString(36).substring(2);
+              const fileContent = Buffer.from(evidence.data, 'base64');
+
+              const body = Buffer.concat([
+                Buffer.from(`--${boundary}\r\n`),
+                Buffer.from(`Content-Disposition: form-data; name="file"; filename="${evidence.filename}"\r\n`),
+                Buffer.from(`Content-Type: ${evidence.contentType}\r\n\r\n`),
+                fileContent,
+                Buffer.from(`\r\n--${boundary}--\r\n`),
+              ]);
+
+              const attachResponse = await fetch(`${jiraBaseUrl}/rest/api/3/issue/${testExecKey}/attachments`, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Basic ${Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString('base64')}`,
+                  'X-Atlassian-Token': 'no-check',
+                  'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                },
+                body,
+              });
+
+              if (attachResponse.ok) {
+                console.log(`    📎 Attached: ${evidence.filename}`);
+              } else {
+                console.log(`    ⚠️  Attachment failed: ${await attachResponse.text()}`);
+              }
+            } catch (attachError) {
+              console.log(`    ⚠️  Attachment error: ${attachError.message}`);
+            }
+          }
+        }
       }
       console.log('');
     } catch (error) {
