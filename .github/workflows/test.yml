@@ -36,27 +36,40 @@ jobs:
         run: npm ci
 
       - name: Build Tauri app
-        run: npm run tauri build -- --debug --no-bundle
+        run: |
+          npm run tauri build -- --debug --no-bundle
+          echo "=== Checking build output ==="
+          ls -la ./src-tauri/target/debug/ | head -20
+          echo "=== Binary info ==="
+          file ./src-tauri/target/debug/tauri-test-temp || echo "Binary not found"
+          chmod +x ./src-tauri/target/debug/tauri-test-temp || echo "Could not chmod"
 
       - name: Run WebDriverIO tests
         run: |
           # Find WebKitWebDriver path
           which WebKitWebDriver || echo "WebKitWebDriver not in PATH"
 
-          # Start tauri-driver in background
-          tauri-driver &
+          # Verify binary exists and is executable
+          echo "=== Checking application binary ==="
+          ls -la ./src-tauri/target/debug/tauri-test-temp
+
+          # Start tauri-driver with verbose logging
+          RUST_LOG=debug tauri-driver 2>&1 &
           DRIVER_PID=$!
           sleep 5
 
-          # Check if driver is running
+          # Check if driver is running and show any output
           if ! kill -0 $DRIVER_PID 2>/dev/null; then
             echo "tauri-driver failed to start"
             exit 1
           fi
           echo "tauri-driver running on PID $DRIVER_PID"
 
+          # Test that driver is responding
+          curl -s http://127.0.0.1:4444/status || echo "Driver status check failed"
+
           # Run tests
-          npm test || TEST_EXIT=$?
+          CI=true npm test || TEST_EXIT=$?
 
           # Stop tauri-driver
           kill $DRIVER_PID 2>/dev/null || true
