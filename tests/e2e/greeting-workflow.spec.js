@@ -19,13 +19,19 @@ describe('TT-14: Verify complete greeting workflow', () => {
     await expect(nameInput).toHaveValue(testName);
 
     // Step 3: Click the Greet button
-    const greetButton = await $('button[type="submit"], button*=Greet');
+    const greetButton = await $('button[type="submit"]');
     await expect(greetButton).toBeDisplayed();
     await greetButton.click();
 
-    // Step 4: Wait for greeting response
-    const greetingMessage = await $('p*=Hello');
-    await greetingMessage.waitForDisplayed({ timeout: 5000 });
+    // Step 4: Wait for greeting response (paragraph after form contains the greeting)
+    const greetingMessage = await $('form + p');
+    await browser.waitUntil(
+      async () => {
+        const text = await greetingMessage.getText();
+        return text.includes('Hello');
+      },
+      { timeout: 5000, timeoutMsg: 'Greeting message did not appear' }
+    );
 
     // Step 5: Verify greeting message content
     const messageText = await greetingMessage.getText();

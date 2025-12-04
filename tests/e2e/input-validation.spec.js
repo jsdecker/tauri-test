@@ -14,7 +14,7 @@ describe('TT-16: Verify input validation handles edge cases', () => {
   it('should handle empty input gracefully', async () => {
     // Step 1: Submit form with empty input
     const nameInput = await $('input[type="text"], input#greet-input, input[placeholder*="name" i]');
-    const greetButton = await $('button[type="submit"], button*=Greet');
+    const greetButton = await $('button[type="submit"]');
 
     await nameInput.setValue('');
     await greetButton.click();
@@ -29,7 +29,7 @@ describe('TT-16: Verify input validation handles edge cases', () => {
   it('should handle special characters without script execution', async () => {
     // Step 2: Clear and enter special characters
     const nameInput = await $('input[type="text"], input#greet-input, input[placeholder*="name" i]');
-    const greetButton = await $('button[type="submit"], button*=Greet');
+    const greetButton = await $('button[type="submit"]');
 
     const xssPayload = "<script>alert('xss')</script>";
     await nameInput.setValue(xssPayload);
@@ -55,7 +55,7 @@ describe('TT-16: Verify input validation handles edge cases', () => {
   it('should handle very long input appropriately', async () => {
     // Step 3: Clear and enter very long input
     const nameInput = await $('input[type="text"], input#greet-input, input[placeholder*="name" i]');
-    const greetButton = await $('button[type="submit"], button*=Greet');
+    const greetButton = await $('button[type="submit"]');
 
     const longInput = 'A'.repeat(1000);
     await nameInput.setValue(longInput);
@@ -71,15 +71,21 @@ describe('TT-16: Verify input validation handles edge cases', () => {
   it('should handle unicode characters correctly', async () => {
     // Step 4 & 5: Clear and enter unicode characters, verify greeting
     const nameInput = await $('input[type="text"], input#greet-input, input[placeholder*="name" i]');
-    const greetButton = await $('button[type="submit"], button*=Greet');
+    const greetButton = await $('button[type="submit"]');
 
     const unicodeInput = 'José María 日本語';
     await nameInput.setValue(unicodeInput);
     await greetButton.click();
 
-    // Wait for greeting response
-    const greetingMessage = await $('p*=Hello');
-    await greetingMessage.waitForDisplayed({ timeout: 5000 });
+    // Wait for greeting response (paragraph after form contains the greeting)
+    const greetingMessage = await $('form + p');
+    await browser.waitUntil(
+      async () => {
+        const text = await greetingMessage.getText();
+        return text.includes('Hello');
+      },
+      { timeout: 5000, timeoutMsg: 'Greeting message did not appear' }
+    );
 
     // Verify greeting displays unicode characters properly
     const messageText = await greetingMessage.getText();
