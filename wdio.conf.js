@@ -193,6 +193,7 @@ export const config = {
     console.log('\n📤 Uploading results to Xray...\n');
 
     try {
+      // Authenticate with Xray
       const authResponse = await fetch('https://xray.cloud.getxray.app/api/v2/authenticate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -205,8 +206,108 @@ export const config = {
 
       const token = (await authResponse.text()).replace(/"/g, '');
       console.log('✅ Authenticated with Xray\n');
-      console.log('📋 Results saved to ./test-results/');
-      console.log('   Use sync-test-steps.js to sync test steps to Xray\n');
+
+      // Map spec files to test case keys
+      const specToTestKey = {
+        'welcome-screen.spec.js': 'TT-13',
+        'greeting-workflow.spec.js': 'TT-14',
+        'external-links.spec.js': 'TT-15',
+        'input-validation.spec.js': 'TT-16',
+      };
+
+      // Parse results and build Xray payload
+      const tests = [];
+      for (const file of resultsFiles) {
+        const resultsPath = path.join(resultsDir, file);
+        const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+
+        for (const suite of results.suites || []) {
+          // Extract spec filename from the file path
+          const specFile = suite.file ? path.basename(suite.file) : null;
+          const testKey = specFile ? specToTestKey[specFile] : null;
+
+          if (!testKey) continue;
+
+          // Determine overall status from tests
+          let status = 'PASSED';
+          const testResults = [];
+
+          for (const test of suite.tests || []) {
+            const testStatus = test.state === 'passed' ? 'PASSED' : test.state === 'failed' ? 'FAILED' : 'TODO';
+            if (testStatus === 'FAILED') status = 'FAILED';
+
+            testResults.push({
+              name: test.name,
+              status: testStatus,
+              duration: test.duration,
+            });
+          }
+
+          // Check for evidence screenshot
+          const evidenceFile = `${testKey}-${specFile.replace('.spec.js', '')}.png`;
+          const evidencePath = path.join(resultsDir, 'evidence', evidenceFile);
+          const evidence = [];
+
+          if (fs.existsSync(evidencePath)) {
+            const imageData = fs.readFileSync(evidencePath);
+            evidence.push({
+              data: imageData.toString('base64'),
+              filename: evidenceFile,
+              contentType: 'image/png',
+            });
+          }
+
+          tests.push({
+            testKey,
+            status,
+            comment: `Automated test run - ${testResults.length} test(s)`,
+            evidence,
+          });
+        }
+      }
+
+      if (tests.length === 0) {
+        console.log('⚠️  No test results mapped to Xray test cases\n');
+        return;
+      }
+
+      // Build Xray import payload
+      const xrayPayload = {
+        info: {
+          summary: `Automated E2E Test Run - ${new Date().toISOString()}`,
+          description: 'WebDriverIO E2E tests executed via CI/CD pipeline',
+          project: 'TT',
+        },
+        tests,
+      };
+
+      console.log(`📋 Importing ${tests.length} test result(s) to Xray...\n`);
+
+      // Import results to Xray
+      const importResponse = await fetch('https://xray.cloud.getxray.app/api/v2/import/execution', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(xrayPayload),
+      });
+
+      if (!importResponse.ok) {
+        const errorText = await importResponse.text();
+        throw new Error(`Import failed: ${errorText}`);
+      }
+
+      const importResult = await importResponse.json();
+      console.log(`✅ Results imported to Xray!`);
+      console.log(`   Test Execution: ${importResult.key || 'Created'}\n`);
+
+      // Log individual test statuses
+      for (const test of tests) {
+        const icon = test.status === 'PASSED' ? '✓' : '✗';
+        console.log(`   ${icon} ${test.testKey}: ${test.status}`);
+      }
+      console.log('');
     } catch (error) {
       console.error('❌ Xray upload failed:', error.message);
     }
