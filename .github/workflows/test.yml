@@ -1,0 +1,71 @@
+name: Tauri E2E Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Tauri app
+        run: npm run tauri build -- --debug --no-bundle
+
+      - name: Run WebDriverIO tests
+        run: |
+          # Start tauri-driver in background
+          tauri-driver &
+          DRIVER_PID=$!
+          sleep 2
+
+          # Run tests
+          npm test || TEST_EXIT=$?
+
+          # Stop tauri-driver
+          kill $DRIVER_PID 2>/dev/null || true
+
+          exit ${TEST_EXIT:-0}
+        env:
+          XRAY_CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
+          XRAY_CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results/
+
+      - name: Upload evidence screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence
+          path: test-results/evidence/
