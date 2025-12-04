@@ -270,41 +270,45 @@ export const config = {
         return;
       }
 
-      // Build Xray import payload
-      const xrayPayload = {
-        info: {
-          summary: `Automated E2E Test Run - ${new Date().toISOString()}`,
-          description: 'WebDriverIO E2E tests executed via CI/CD pipeline',
-          project: 'TT',
-        },
-        tests,
+      console.log(`📋 Creating ${tests.length} separate Test Execution(s) in Xray...\n`);
+
+      // Test case to Test Execution name mapping
+      const testCaseNames = {
+        'TT-13': 'Welcome Screen Verification',
+        'TT-14': 'Greeting Workflow Verification',
+        'TT-15': 'External Links Verification',
+        'TT-16': 'Input Validation Verification',
       };
 
-      console.log(`📋 Importing ${tests.length} test result(s) to Xray...\n`);
-
-      // Import results to Xray
-      const importResponse = await fetch('https://xray.cloud.getxray.app/api/v2/import/execution', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(xrayPayload),
-      });
-
-      if (!importResponse.ok) {
-        const errorText = await importResponse.text();
-        throw new Error(`Import failed: ${errorText}`);
-      }
-
-      const importResult = await importResponse.json();
-      console.log(`✅ Results imported to Xray!`);
-      console.log(`   Test Execution: ${importResult.key || 'Created'}\n`);
-
-      // Log individual test statuses
+      // Import each test as a separate Test Execution
       for (const test of tests) {
+        const xrayPayload = {
+          info: {
+            summary: `${testCaseNames[test.testKey] || test.testKey} - ${new Date().toISOString().split('T')[0]}`,
+            description: `Automated E2E test execution for ${test.testKey}`,
+            project: 'TT',
+          },
+          tests: [test],
+        };
+
+        const importResponse = await fetch('https://xray.cloud.getxray.app/api/v2/import/execution', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(xrayPayload),
+        });
+
+        if (!importResponse.ok) {
+          const errorText = await importResponse.text();
+          console.error(`  ✗ ${test.testKey}: Import failed - ${errorText}`);
+          continue;
+        }
+
+        const importResult = await importResponse.json();
         const icon = test.status === 'PASSED' ? '✓' : '✗';
-        console.log(`   ${icon} ${test.testKey}: ${test.status}`);
+        console.log(`  ${icon} ${test.testKey}: ${test.status} → ${importResult.key}`);
       }
       console.log('');
     } catch (error) {
